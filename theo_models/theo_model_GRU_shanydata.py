@@ -232,14 +232,12 @@ l_losses = []
 l_accuracies = [] 
 
 # Loop through trials
-for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
-    inputs_batch = inputs_batch  # shape: (batch, 2, 16)
-    targets_batch = targets_batch # shape: (batch, 2)
-    optimal_actions_batch = optimal_actions_batch  # shape: (batch,)
+for inputs, targets, optimal_actions in dataloader:
+
 
     optimizer.zero_grad()
-    outputs_pred = model(inputs_batch)  # shape: (batch, 2)
-    loss = criterion(outputs_pred, targets_batch)
+    outputs_pred = model(inputs)  
+    loss = criterion(outputs_pred, targets)
     loss.backward()
     optimizer.step()
     
@@ -247,7 +245,7 @@ for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
     _, predicted_actions = torch.max(outputs_pred, dim=1)
     l_choices.extend(predicted_actions.cpu().numpy().tolist())
 
-    correct = (predicted_actions == optimal_actions_batch).sum().item()
+    correct = (predicted_actions == optimal_actions).sum().item()
 
     l_losses.append(loss.item())
     l_accuracies.append(correct)
