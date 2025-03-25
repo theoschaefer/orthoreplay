@@ -165,29 +165,53 @@ class StateFormationDataset(Dataset):
 # Network Model
 #=============================================================================
 
+
+# class GRUNet(nn.Module):
+#     def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=2):
+#         super(GRUNet, self).__init__()
+#         self.hidden_size = hidden_size
+#         self.num_layers = num_layers
+#         # GRU: input shape (batch, seq_len, input_size)
+#         self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+#         # Fully connected layer mapping hidden state to output reward estimates for two actions
+#         self.fc = nn.Linear(hidden_size, output_size)
+    
+#     def forward(self, x):
+#         # Initialize hidden state
+#         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
+#         out, _ = self.gru(x, h0)
+#         # Take the output at the last time step
+#         out = out[:, -1, :]
+#         output = self.fc(out)
+#         return output
+
 class GRUNet(nn.Module):
-    def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=2):
+    def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=1):
         super(GRUNet, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         # GRU: input shape (batch, seq_len, input_size)
-        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        # self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        self.gru = nn.GRU(input_size, hidden_size, 1, batch_first=True)
+        self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.hidden_activation = nn.ReLU()
         # Fully connected layer mapping hidden state to output reward estimates for two actions
         self.fc = nn.Linear(hidden_size, output_size)
     
     def forward(self, x):
         # Initialize hidden state
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
-        out, _ = self.gru(x, h0)
+        rnn_out, _ = self.gru(x, h0)
         # Take the output at the last time step
-        out = out[:, -1, :]
-        output = self.fc(out)
+        rnn_out = rnn_out[:, -1, :]
+        fc_hidden_out = self.hidden_activation(self.fc_hidden(rnn_out))
+        output = self.fc(fc_hidden_out)
         return output
 
 
 #%% Run model
 
-sub = "sub501"  # Alternative: "randomized_episode"
+sub = "sub503"  # Alternative: "randomized_episode"
 csvpath = fn_data  
 
 dataset = StateFormationDataset(sub, csvpath, isRecurrent=True)
@@ -195,21 +219,18 @@ batch_size = 1
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = GRUNet(input_size=16, hidden_size=32, output_size=2).to(device)
+model = GRUNet(input_size=16, hidden_size=64, output_size=2).to(device)
 
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
+# optimizer = optim.SGD(model.parameters(), lr=0.001)
 
 
 #% Training Loop and Saving Network Choices
 model.train()
-epoch_loss = 0.0
-correct = 0
-total = 0
-l_choices = []  # Choices (predicted action index) for this epoch
+l_choices = []  
 l_losses = []
-l_accuracies = []  # To store accuracy per epoch
-
+l_accuracies = [] 
 
 # Loop through trials
 for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
