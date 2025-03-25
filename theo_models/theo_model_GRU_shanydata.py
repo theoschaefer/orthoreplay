@@ -35,65 +35,16 @@ dir_script = os.getcwd()
 dir_project = os.path.dirname(dir_script)
 
 
+
+#%% Data functions
 #=============================================================================
-# LOAD DATA
+# LOAD AND TRANSFORM DATA
 #=============================================================================
 
-fn_data = f'{dir_project}/State_Formation_behaviour.csv'
-df_rawdata = pd.read_csv(fn_data)
+
+filename_data = f'{dir_project}/State_Formation_behaviour.csv'
+df_rawdata = pd.read_csv(filename_data)
 df_data = df_rawdata.copy()
-
-
-
-#%% Provided Functions
-
-def get_active_trials_input_comb(n_input_nodes, n_actions, n_feat_itemA):
-    # make inputs by combining all choice options
-    itemA_options = np.array([[0, 1, 0, 1],
-                              [0, 1, 1, 0],
-                              [1, 0, 0, 1],
-                              [1, 0, 1, 0]])
-    itemB_options = np.array([[0,1,0,1,0,1],
-                              [0,1,0,1,1,0],
-                              [0,1,1,0,0,1],
-                              [0,1,1,0,1,0],
-                              [1,0,0,1,0,1],
-                              [1,0,0,1,1,0],
-                              [1,0,1,0,0,1],
-                              [1,0,1,0,1,0]])
-    # all possible options for a single itemB
-    # There will be a total of 192 trials (rows)
-    inputs = np.zeros((itemA_options.shape[0] * itemB_options.shape[0] * (itemB_options.shape[0] - 1), n_input_nodes))
-    trial_idx = -1
-    
-    for itemA in np.arange(itemA_options.shape[0]):
-        for itemBacomp in np.arange(itemB_options.shape[0]):  
-            for itemBbcomp in np.setdiff1d(np.arange(itemB_options.shape[0]), itemBacomp):
-                # Here we check that the first four features are not identical (as in your provided code)
-                if not (itemB_options[itemBacomp,0:4] == itemB_options[itemBbcomp,0:4]).all():
-                    trial_idx += 1
-                    # Concatenate: itemA_options (4 features), then itemBacomp (6 features) and itemBbcomp (6 features)
-                    inputs[trial_idx, :] = np.concatenate([itemA_options[itemA, :],
-                                                             itemB_options[itemBacomp, :],
-                                                             itemB_options[itemBbcomp, :]])
-    inputs = inputs[:trial_idx+1, :]
-    return inputs
-
-
-def rewardfun(cinputs, selected_action, reward_weights, n_feat_itemA, n_feat_itemB, n_actions, n_input_nodes): 
-    # Define a choicemap that masks inputs based on each of 2 possible choices
-    choicemap = np.empty((n_actions, n_input_nodes))
-    choicemap[0, :] = np.concatenate((np.repeat(1, n_feat_itemA*2), np.repeat(1, n_feat_itemB*2), np.repeat(0, n_feat_itemB*2)))  # left option
-    choicemap[1, :] = np.concatenate((np.repeat(1, n_feat_itemA*2), np.repeat(0, n_feat_itemB*2), np.repeat(1, n_feat_itemB*2)))  # right option
-    
-    cidx = np.flatnonzero(choicemap[selected_action, :])
-    reward_weights_tmp = reward_weights.copy()
-    R = np.dot(cinputs[0, cidx[np.arange(0, n_feat_itemA*2)]], reward_weights_tmp[0:n_feat_itemA*2]) * \
-        np.dot(cinputs[1, cidx[np.arange(n_feat_itemA*2, n_feat_itemA*2+n_feat_itemB*2)]], 
-               reward_weights_tmp[n_feat_itemA*2:n_feat_itemA*2+n_feat_itemB*2])
-    # Scale reward as in your provided code
-    R = (R * 6.25 + 50) / 100
-    return R
 
 
 def get_input_output_stateformation(sub, csvpath, isRecurrent):
@@ -138,9 +89,57 @@ def get_input_output_stateformation(sub, csvpath, isRecurrent):
     return inputs, outputs
 
 
+def get_active_trials_input_comb(n_input_nodes, n_actions, n_feat_itemA):
+    # make inputs by combining all choice options
+    itemA_options = np.array([[0, 1, 0, 1],
+                              [0, 1, 1, 0],
+                              [1, 0, 0, 1],
+                              [1, 0, 1, 0]])
+    itemB_options = np.array([[0,1,0,1,0,1],
+                              [0,1,0,1,1,0],
+                              [0,1,1,0,0,1],
+                              [0,1,1,0,1,0],
+                              [1,0,0,1,0,1],
+                              [1,0,0,1,1,0],
+                              [1,0,1,0,0,1],
+                              [1,0,1,0,1,0]])
+    # all possible options for a single itemB
+    # There will be a total of 192 trials (rows)
+    inputs = np.zeros((itemA_options.shape[0] * itemB_options.shape[0] * (itemB_options.shape[0] - 1), n_input_nodes))
+    trial_idx = -1
+    
+    for itemA in np.arange(itemA_options.shape[0]):
+        for itemBacomp in np.arange(itemB_options.shape[0]):  
+            for itemBbcomp in np.setdiff1d(np.arange(itemB_options.shape[0]), itemBacomp):
+                # Here we check that the first four features are not identical (as in your provided code)
+                if not (itemB_options[itemBacomp,0:4] == itemB_options[itemBbcomp,0:4]).all():
+                    trial_idx += 1
+                    # Concatenate: itemA_options (4 features), then itemBacomp (6 features) and itemBbcomp (6 features)
+                    inputs[trial_idx, :] = np.concatenate([itemA_options[itemA, :],
+                                                             itemB_options[itemBacomp, :],
+                                                             itemB_options[itemBbcomp, :]])
+    inputs = inputs[:trial_idx+1, :]
+    return inputs
 
-#%% Convert to PyTorch dataset
 
+# Reward function
+def rewardfun(cinputs, selected_action, reward_weights, n_feat_itemA, n_feat_itemB, n_actions, n_input_nodes): 
+    # Define a choicemap that masks inputs based on each of 2 possible choices
+    choicemap = np.empty((n_actions, n_input_nodes))
+    choicemap[0, :] = np.concatenate((np.repeat(1, n_feat_itemA*2), np.repeat(1, n_feat_itemB*2), np.repeat(0, n_feat_itemB*2)))  # left option
+    choicemap[1, :] = np.concatenate((np.repeat(1, n_feat_itemA*2), np.repeat(0, n_feat_itemB*2), np.repeat(1, n_feat_itemB*2)))  # right option
+    
+    cidx = np.flatnonzero(choicemap[selected_action, :])
+    reward_weights_tmp = reward_weights.copy()
+    R = np.dot(cinputs[0, cidx[np.arange(0, n_feat_itemA*2)]], reward_weights_tmp[0:n_feat_itemA*2]) * \
+        np.dot(cinputs[1, cidx[np.arange(n_feat_itemA*2, n_feat_itemA*2+n_feat_itemB*2)]], 
+               reward_weights_tmp[n_feat_itemA*2:n_feat_itemA*2+n_feat_itemB*2])
+    # Scale reward as in your provided code
+    R = (R * 6.25 + 50) / 100
+    return R
+
+
+# Convert to PyTorch dataset
 class StateFormationDataset(Dataset):
     def __init__(self, sub, csvpath, isRecurrent=True):
         # Use the provided function to get inputs and outputs.
@@ -159,19 +158,43 @@ class StateFormationDataset(Dataset):
         return self.inputs[idx], self.outputs[idx], self.optimal_actions[idx]
 
 
-
 #%% GRU Network
 #=============================================================================
 # Network Model
 #=============================================================================
 
+class GRUNet(nn.Module):
+    def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=1):
+        super(GRUNet, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        # GRU RNN layer
+        # self.gru = nn.RNN(input_size, hidden_size, 1, nonlinearity='tanh', bias=True, batch_first=True)
+        self.gru = nn.GRU(input_size, hidden_size, 1, batch_first=True)
+        # Linear Hidden layer
+        self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.hidden_activation = nn.ReLU()
+        # Fully connected layer mapping hidden state to output reward estimates for two actions
+        self.fc = nn.Linear(hidden_size, output_size)
+    
+    def forward(self, x):
+        # Initialize hidden state
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
+        rnn_out, _ = self.gru(x)
+        # rnn_out, _ = self.gru(x, h0)
+        # Take the output at the last time step
+        rnn_out = rnn_out[:, -1, :]
+        fc_hidden_out = self.hidden_activation(self.fc_hidden(rnn_out))
+        output = self.fc(fc_hidden_out)
+        return output
 
+# # Two RNN layers
 # class GRUNet(nn.Module):
 #     def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=2):
 #         super(GRUNet, self).__init__()
 #         self.hidden_size = hidden_size
 #         self.num_layers = num_layers
-#         # GRU: input shape (batch, seq_len, input_size)
+#         # GRU layers
 #         self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
 #         # Fully connected layer mapping hidden state to output reward estimates for two actions
 #         self.fc = nn.Linear(hidden_size, output_size)
@@ -185,37 +208,14 @@ class StateFormationDataset(Dataset):
 #         output = self.fc(out)
 #         return output
 
-class GRUNet(nn.Module):
-    def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=1):
-        super(GRUNet, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        # GRU: input shape (batch, seq_len, input_size)
-        # self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
-        self.gru = nn.GRU(input_size, hidden_size, 1, batch_first=True)
-        self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
-        self.hidden_activation = nn.ReLU()
-        # Fully connected layer mapping hidden state to output reward estimates for two actions
-        self.fc = nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        # Initialize hidden state
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
-        rnn_out, _ = self.gru(x, h0)
-        # Take the output at the last time step
-        rnn_out = rnn_out[:, -1, :]
-        fc_hidden_out = self.hidden_activation(self.fc_hidden(rnn_out))
-        output = self.fc(fc_hidden_out)
-        return output
 
 
 #%% Run model
 
-sub = "sub503"  # Alternative: "randomized_episode"
-csvpath = fn_data  
+sub = "sub508"  # Alternative: "randomized_episode"
 
-dataset = StateFormationDataset(sub, csvpath, isRecurrent=True)
 batch_size = 1
+dataset = StateFormationDataset(sub, filename_data, isRecurrent=True)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -259,14 +259,13 @@ for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
 
 
 window = 20
-moving_avg = [np.mean(l_accuracies[max(0, i-window):i+1]) * 100
-              for i in range(len(l_accuracies))]
-
+moving_acc = np.convolve(l_accuracies, np.ones(window)/window, mode='valid') * 100
+moving_loss = np.convolve(l_losses, np.ones(window)/window, mode='valid')
 
 #% Plotting the Training Accuracy
 plt.figure(figsize=(8, 5))
-plt.plot(np.arange(1, len(dataloader)+1), moving_avg, marker='o')
-# plt.plot(np.arange(1, len(dataloader)+1), l_accuracies, marker='o')
+# plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
+plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o')
 plt.xlabel("Trial")
 plt.ylabel("Training Accuracy (%)")
 plt.title("Training Accuracy over Trials")
@@ -277,8 +276,8 @@ plt.show()
 
 #% Plotting the Training Loss
 plt.figure(figsize=(8, 5))
-# plt.plot(np.arange(1, len(dataloader)+1), moving_avg, marker='o')
-plt.plot(np.arange(1, len(dataloader)+1), l_losses, marker='o')
+# plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
+plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o')
 plt.xlabel("Trial")
 plt.ylabel("Training Loss")
 plt.title("Loss over Trials")
