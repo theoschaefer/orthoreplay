@@ -168,5 +168,5 @@ if __name__ == "__main__":
     plt.plot(moving_avg)
     plt.xlabel("Trial")
     plt.ylabel("Accuracy (Moving Average)")
-    plt.title("Binary Model Performance")
+    plt.title("Model Performance")
     plt.show()
