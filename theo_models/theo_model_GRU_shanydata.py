@@ -218,8 +218,7 @@ batch_size = 1
 dataset = StateFormationDataset(sub, filename_data, isRecurrent=True)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = GRUNet(input_size=16, hidden_size=64, output_size=2).to(device)
+model = GRUNet(input_size=16, hidden_size=64, output_size=2)
 
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -234,9 +233,9 @@ l_accuracies = []
 
 # Loop through trials
 for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
-    inputs_batch = inputs_batch.to(device)  # shape: (batch, 2, 16)
-    targets_batch = targets_batch.to(device)  # shape: (batch, 2)
-    optimal_actions_batch = optimal_actions_batch.to(device)  # shape: (batch,)
+    inputs_batch = inputs_batch  # shape: (batch, 2, 16)
+    targets_batch = targets_batch # shape: (batch, 2)
+    optimal_actions_batch = optimal_actions_batch  # shape: (batch,)
 
     optimizer.zero_grad()
     outputs_pred = model(inputs_batch)  # shape: (batch, 2)
