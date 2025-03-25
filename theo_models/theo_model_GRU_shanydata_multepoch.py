@@ -24,6 +24,7 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -212,62 +213,72 @@ class GRUNet(nn.Module):
 
 #%% Run model
 
-sub = "sub501"  # Alternative: "randomized_episode"
+sub = "sub508"  # Alternative: "randomized_episode"
 
 batch_size = 1
 dataset = StateFormationDataset(sub, filename_data, isRecurrent=True)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = GRUNet(input_size=16, hidden_size=64, output_size=2).to(device)
 
+model = GRUNet(input_size=16, hidden_size=50, output_size=2).to(device)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 # optimizer = optim.SGD(model.parameters(), lr=0.001)
 
+num_epochs = 1
+epoch_accuracies = []
+epoch_losses = []
 
-#% Training Loop and Saving Network Choices
-model.train()
-l_choices = []  
-l_losses = []
-l_accuracies = [] 
-
-# Loop through trials
-for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
-    inputs_batch = inputs_batch.to(device)  # shape: (batch, 2, 16)
-    targets_batch = targets_batch.to(device)  # shape: (batch, 2)
-    optimal_actions_batch = optimal_actions_batch.to(device)  # shape: (batch,)
-
-    optimizer.zero_grad()
-    outputs_pred = model(inputs_batch)  # shape: (batch, 2)
-    loss = criterion(outputs_pred, targets_batch)
-    loss.backward()
-    optimizer.step()
+for epoch in tqdm(range(num_epochs)):
     
-    # Compute predicted choices: index of maximum predicted reward
-    _, predicted_actions = torch.max(outputs_pred, dim=1)
-    l_choices.extend(predicted_actions.cpu().numpy().tolist())
+    model = GRUNet(input_size=16, hidden_size=50, output_size=2).to(device)
+    #% Training Loop and Saving Network Choices
+    model.train()
+    l_choices = []  
+    l_losses = []
+    l_accuracies = [] 
+    
+    # Loop through trials
+    for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
+        inputs_batch = inputs_batch.to(device)  # shape: (batch, 2, 16)
+        targets_batch = targets_batch.to(device)  # shape: (batch, 2)
+        optimal_actions_batch = optimal_actions_batch.to(device)  # shape: (batch,)
+    
+        optimizer.zero_grad()
+        outputs_pred = model(inputs_batch)  # shape: (batch, 2)
+        loss = criterion(outputs_pred, targets_batch)
+        loss.backward()
+        optimizer.step()
+        
+        # Compute predicted choices: index of maximum predicted reward
+        _, predicted_actions = torch.max(outputs_pred, dim=1)
+        l_choices.extend(predicted_actions.cpu().numpy().tolist())
+    
+        correct = (predicted_actions == optimal_actions_batch).sum().item()
+    
+        l_losses.append(loss.item())
+        l_accuracies.append(correct)
+    
+    epoch_accuracies.append(l_accuracies)
+    epoch_losses.append(l_losses)
+    
 
-    correct = (predicted_actions == optimal_actions_batch).sum().item()
 
-    l_losses.append(loss.item())
-    l_accuracies.append(correct)
-
-
-
-#================== CHECK RESULTS ============================================#
+#================== Plot last Epoch Results ============================================#
 
 
 window = 20
 moving_acc = np.convolve(l_accuracies, np.ones(window)/window, mode='valid') * 100
 moving_loss = np.convolve(l_losses, np.ones(window)/window, mode='valid')
 
+
 plt.figure(figsize=(10, 5))
 
 #% Plotting the Training Accuracy
 plt.subplot(1, 2, 1)
 # plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
-plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o')
+plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o', color='green')
 plt.xlabel("Trial")
 plt.ylabel("Training Accuracy (%)")
 plt.title("Training Accuracy over Trials")
@@ -287,5 +298,41 @@ plt.axhline(y=0, color='green', linestyle='dotted')
 plt.grid(True)
 plt.show()
 
+
+#%%
+#================== Plot last Epoch Results ============================================#
+
+
+window = 20
+moving_acc = [np.convolve(l_acc, np.ones(window)/window, mode='valid') * 100 
+              for l_acc in epoch_accuracies]
+moving_loss = [np.convolve(l_loss, np.ones(window)/window, mode='valid') 
+               for l_loss in epoch_losses]
+
+
+plt.figure(figsize=(10, 5))
+
+#% Plotting the Training Accuracy
+plt.subplot(1, 2, 1)
+# plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
+plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o', alpha=.1)
+plt.xlabel("Trial")
+plt.ylabel("Training Accuracy (%)")
+plt.title("Training Accuracy over Trials")
+plt.axhline(y=50, color='red', linestyle='dotted')
+plt.grid(True)
+plt.ylim([0,100])
+# plt.show()
+
+#% Plotting the Training Loss
+plt.subplot(1, 2, 2)
+# plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
+plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o', color='darkred', alpha=.1)
+plt.xlabel("Trial")
+plt.ylabel("Training Loss")
+plt.title("Loss over Trials")
+plt.axhline(y=0, color='green', linestyle='dotted')
+plt.grid(True)
+plt.show()
 
 
