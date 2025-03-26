@@ -7,7 +7,7 @@ sdfasdfasd
 finally
 
 
-sdafkasjdfsa;dfj
+sdafkasjdfsa;dfj ghghg
 
 neural network hasattr or here too 
 
