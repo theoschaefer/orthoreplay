@@ -290,7 +290,7 @@ input_size = 16  # 4 for clients + 6 for left stimuli + 6 for right stimuli
 hidden_size1 = 80
 hidden_size2 = 40
 output_size = 2  # Two outputs: reward for left and right stimuli
-learning_rate = 0.01
+learning_rate = 0.01 # better with 0.001
 
 # Define the neural network model with an RNN layer
 class SimpleRNN(nn.Module):
@@ -436,6 +436,7 @@ ax.set(xlabel='Trial', ylabel='Accuracy', title='Accuracy as moving average acro
 ax.legend(title='Network')
 plt.tight_layout()
 plt.show()
+
 
 
 
