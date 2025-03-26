@@ -180,7 +180,7 @@ model = SimpleNN(input_size, hidden_size1, hidden_size2, output_size)
 def initialize_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
-        nn.init.zeros_(m.bias)
+        nn.init.zeros_(m.bias) # make explicit
 
 # Apply custom initialization
 model.apply(initialize_weights)
