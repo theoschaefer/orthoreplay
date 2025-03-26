@@ -24,6 +24,7 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -33,7 +34,7 @@ from torch.utils.data import Dataset, DataLoader
 
 dir_script = os.getcwd()
 dir_project = os.path.dirname(dir_script)
-                                
+
 
 
 #%% Data functions
@@ -166,26 +167,26 @@ class StateFormationDataset(Dataset):
 class GRUNet(nn.Module):
     def __init__(self, input_size=16, hidden_size=64, output_size=2, num_layers=1):
         super(GRUNet, self).__init__()
-        self.hidden_size = hidden_size
         self.num_layers = num_layers
-        # GRU RNN layer
-        self.gru = nn.RNN(input_size, hidden_size, 1, nonlinearity='tanh', bias=True, batch_first=True)
-        # self.gru = nn.GRU(input_size, hidden_size, 1, batch_first=True)
-        # Linear Hidden layer
-        self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.hidden_size = hidden_size
         self.hidden_activation = nn.ReLU()
-        # Fully connected layer mapping hidden state to output reward estimates for two actions
-        self.fc = nn.Linear(hidden_size, output_size)
+        # GRU RNN layer
+        # self.rnn = nn.RNN(input_size, hidden_size, 1, nonlinearity='tanh', bias=True, batch_first=True)
+        self.rnn = nn.GRU(input_size, hidden_size, 1, batch_first=True)
+        # Fully connected Linear Hidden layer
+        self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
+        # Fully connected output layer mapping hidden state to output reward estimates for two actions
+        self.fc_out = nn.Linear(hidden_size, output_size)
     
     def forward(self, x):
         # Initialize hidden state
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
-        rnn_out, _ = self.gru(x)
+        # h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
+        rnn_out, _ = self.rnn(x)
         # rnn_out, _ = self.gru(x, h0)
         # Take the output at the last time step
         rnn_out = rnn_out[:, -1, :]
         fc_hidden_out = self.hidden_activation(self.fc_hidden(rnn_out))
-        output = self.fc(fc_hidden_out)
+        output = self.fc_out(fc_hidden_out)
         return output
 
 # # Two RNN layers
@@ -212,76 +213,91 @@ class GRUNet(nn.Module):
 
 #%% Run model
 
-sub = "sub501"  # Alternative: "randomized_episode"
+sub = "sub508"  # Alternative: "randomized_episode"
 
 batch_size = 1
 dataset = StateFormationDataset(sub, filename_data, isRecurrent=True)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-model = GRUNet(input_size=16, hidden_size=64, output_size=2)
-
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.01)
-# optimizer = optim.SGD(model.parameters(), lr=0.05)
 
+num_independent_runs = 50  # Number of independent training runs ("epochs")
+all_runs_accuracies = []
+all_runs_losses = []
 
-#% Training Loop and Saving Network Choices
-model.train()
-l_choices = []  
-l_losses = []
-l_accuracies = [] 
-
-# Loop through trials
-for inputs, targets, optimal_actions in dataloader:
-
-    optimizer.zero_grad()
-    outputs_pred = model(inputs)  
-    loss = criterion(outputs_pred, targets)
-    loss.backward()
-    optimizer.step()
+for run in tqdm(range(num_independent_runs)):
+    # Reinitialize the model for each independent run
+    model = GRUNet(input_size=16, hidden_size=64, output_size=2)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    # optimizer = optim.SGD(model.parameters(), lr=0.01)
     
-    # Compute predicted choices: index of maximum predicted reward
-    _, predicted_actions = torch.max(outputs_pred, dim=1)
-    l_choices.extend(predicted_actions.cpu().numpy().tolist())
+    run_accuracies = []  # Track accuracy for this run (number correct per trial)
+    run_losses = []      # Track loss for this run
+    
+    # Train over all trials in the dataset
+    for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
+        optimizer.zero_grad()
+        outputs_pred = model(inputs_batch)  # Shape: (batch, 2)
+        loss = criterion(outputs_pred, targets_batch)
+        loss.backward()
+        optimizer.step()
+        
+        # Calculate predicted choices: index of maximum predicted reward
+        _, predicted_actions = torch.max(outputs_pred, dim=1)
+        correct = (predicted_actions == optimal_actions_batch).sum().item()
+        
+        run_losses.append(loss.item())
+        run_accuracies.append(correct)
+    
+    all_runs_accuracies.append(run_accuracies)
+    all_runs_losses.append(run_losses)
 
-    correct = (predicted_actions == optimal_actions).item()
-
-    l_losses.append(loss.item())
-    l_accuracies.append(correct)
 
 
+#================== Plot last Epoch Results ============================================#
 
-#================== CHECK RESULTS ============================================#
 
+# Define a moving average window
+window = 25
 
-window = 20
-moving_acc = np.convolve(l_accuracies, np.ones(window)/window, mode='valid') * 100
-moving_loss = np.convolve(l_losses, np.ones(window)/window, mode='valid')
+# Compute moving averages for each run
+moving_acc_runs = [np.convolve(run_acc, np.ones(window)/window, mode='valid') * 100 
+                   for run_acc in all_runs_accuracies]
+moving_loss_runs = [np.convolve(run_loss, np.ones(window)/window, mode='valid') 
+                    for run_loss in all_runs_losses]
 
-plt.figure(figsize=(10, 5))
+# Calculate the mean moving average across runs (assuming all runs have the same length)
+mean_moving_acc = np.mean(moving_acc_runs, axis=0)
+mean_moving_loss = np.mean(moving_loss_runs, axis=0)
 
-#% Plotting the Training Accuracy
+plt.figure(figsize=(12, 5))
+
+# Plot Accuracy
 plt.subplot(1, 2, 1)
-# plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
-plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o')
+for run_acc in moving_acc_runs:
+    plt.plot(run_acc, marker='.', alpha=0.1, color='green')
+plt.plot(mean_moving_acc, marker='.', color='black', linewidth=2, label='Mean Accuracy')
 plt.xlabel("Trial")
 plt.ylabel("Training Accuracy (%)")
-plt.title("Training Accuracy over Trials")
-plt.axhline(y=50, color='red', linestyle='dotted')
+plt.title("Independent Training Runs: Accuracy")
+plt.axhline(y=50, color='red', linestyle='dotted', label='Chance (50%)')
 plt.grid(True)
-plt.ylim([0,100])
-# plt.show()
+plt.ylim([0, 100])
+plt.legend()
 
-#% Plotting the Training Loss
+# Plot Loss
 plt.subplot(1, 2, 2)
-# plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
-plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o', color='darkred')
+for run_loss in moving_loss_runs:
+    plt.plot(run_loss, marker='.', alpha=0.1, color='darkred')
+plt.plot(mean_moving_loss, marker='.', color='black', linewidth=2, label='Mean Loss')
 plt.xlabel("Trial")
 plt.ylabel("Training Loss")
-plt.title("Loss over Trials")
-plt.axhline(y=0, color='green', linestyle='dotted')
+plt.title("Independent Training Runs: Loss")
+plt.axhline(y=0, color='green', linestyle='dotted', label='Zero Loss')
 plt.grid(True)
-plt.show()
+plt.legend()
 
+plt.tight_layout()
+plt.show()
 
 

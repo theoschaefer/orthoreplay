@@ -219,20 +219,20 @@ batch_size = 1
 dataset = StateFormationDataset(sub, filename_data, isRecurrent=True)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = GRUNet(input_size=16, hidden_size=50, output_size=2).to(device)
+model = GRUNet(input_size=16, hidden_size=50, output_size=2)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 # optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-num_epochs = 1
+num_epochs = 10
 epoch_accuracies = []
 epoch_losses = []
 
 for epoch in tqdm(range(num_epochs)):
     
-    model = GRUNet(input_size=16, hidden_size=50, output_size=2).to(device)
+    # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    model = GRUNet(input_size=16, hidden_size=50, output_size=2)
     #% Training Loop and Saving Network Choices
     model.train()
     l_choices = []  
@@ -241,9 +241,9 @@ for epoch in tqdm(range(num_epochs)):
     
     # Loop through trials
     for inputs_batch, targets_batch, optimal_actions_batch in dataloader:
-        inputs_batch = inputs_batch.to(device)  # shape: (batch, 2, 16)
-        targets_batch = targets_batch.to(device)  # shape: (batch, 2)
-        optimal_actions_batch = optimal_actions_batch.to(device)  # shape: (batch,)
+        inputs_batch = inputs_batch  # shape: (batch, 2, 16)
+        targets_batch = targets_batch # shape: (batch, 2)
+        optimal_actions_batch = optimal_actions_batch # shape: (batch,)
     
         optimizer.zero_grad()
         outputs_pred = model(inputs_batch)  # shape: (batch, 2)
@@ -268,35 +268,35 @@ for epoch in tqdm(range(num_epochs)):
 #================== Plot last Epoch Results ============================================#
 
 
-window = 20
-moving_acc = np.convolve(l_accuracies, np.ones(window)/window, mode='valid') * 100
-moving_loss = np.convolve(l_losses, np.ones(window)/window, mode='valid')
+# window = 20
+# moving_acc = np.convolve(l_accuracies, np.ones(window)/window, mode='valid') * 100
+# moving_loss = np.convolve(l_losses, np.ones(window)/window, mode='valid')
 
 
-plt.figure(figsize=(10, 5))
+# plt.figure(figsize=(10, 5))
 
-#% Plotting the Training Accuracy
-plt.subplot(1, 2, 1)
-# plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
-plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o', color='green')
-plt.xlabel("Trial")
-plt.ylabel("Training Accuracy (%)")
-plt.title("Training Accuracy over Trials")
-plt.axhline(y=50, color='red', linestyle='dotted')
-plt.grid(True)
-plt.ylim([0,100])
+# #% Plotting the Training Accuracy
+# plt.subplot(1, 2, 1)
+# # plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
+# plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o', color='green')
+# plt.xlabel("Trial")
+# plt.ylabel("Training Accuracy (%)")
+# plt.title("Training Accuracy over Trials")
+# plt.axhline(y=50, color='red', linestyle='dotted')
+# plt.grid(True)
+# plt.ylim([0,100])
+# # plt.show()
+
+# #% Plotting the Training Loss
+# plt.subplot(1, 2, 2)
+# # plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
+# plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o', color='darkred')
+# plt.xlabel("Trial")
+# plt.ylabel("Training Loss")
+# plt.title("Loss over Trials")
+# plt.axhline(y=0, color='green', linestyle='dotted')
+# plt.grid(True)
 # plt.show()
-
-#% Plotting the Training Loss
-plt.subplot(1, 2, 2)
-# plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
-plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o', color='darkred')
-plt.xlabel("Trial")
-plt.ylabel("Training Loss")
-plt.title("Loss over Trials")
-plt.axhline(y=0, color='green', linestyle='dotted')
-plt.grid(True)
-plt.show()
 
 
 #%%
@@ -315,7 +315,8 @@ plt.figure(figsize=(10, 5))
 #% Plotting the Training Accuracy
 plt.subplot(1, 2, 1)
 # plt.plot(np.arange(1, len(l_accuracies)+1), l_accuracies, marker='o')
-plt.plot(np.arange(1, len(moving_acc)+1), moving_acc, marker='o', alpha=.1)
+# plt.plot(np.arange(1, len(moving_acc[0])+1), moving_acc[0], marker='o', alpha=.1)
+plt.plot(moving_acc, marker='o', alpha=.1)
 plt.xlabel("Trial")
 plt.ylabel("Training Accuracy (%)")
 plt.title("Training Accuracy over Trials")
@@ -327,12 +328,15 @@ plt.ylim([0,100])
 #% Plotting the Training Loss
 plt.subplot(1, 2, 2)
 # plt.plot(np.arange(1, len(l_losses)+1), l_losses, marker='o')
-plt.plot(np.arange(1, len(moving_loss)+1), moving_loss, marker='o', color='darkred', alpha=.1)
+plt.plot(moving_loss, marker='o', color='darkred', alpha=.1)
+# plt.plot(np.arange(1, len(moving_loss[0])+1), moving_loss[0], marker='o', color='darkred', alpha=.1)
 plt.xlabel("Trial")
 plt.ylabel("Training Loss")
 plt.title("Loss over Trials")
 plt.axhline(y=0, color='green', linestyle='dotted')
 plt.grid(True)
 plt.show()
+
+
 
 
