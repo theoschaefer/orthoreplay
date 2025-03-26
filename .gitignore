@@ -1,0 +1,5 @@
+# don't upload mac junk
+.DS_Store
+
+# don't upload mnist data
+neele_playground/mnist/*.csv
