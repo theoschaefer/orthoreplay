@@ -48,6 +48,7 @@ def get_input_output_stateformation(sub, csvpath, isRecurrent):
     n_feat_itemB = 3   # 3 binary house features (e.g., forest/mountain, swing/pool)
     n_actions = 2      # 2 choice alternatives: left house / right house
     n_input_nodes = 16 # 16 input nodes (each 2 nodes code a single binary feature)
+    # reward_weights = np.array([-1,2,0,0,-1,1,-0,0,-3,10])
     reward_weights = np.array([-1,2,0,0,-1,1,-3,3,0,0])
     
     if sub == 'randomized_episode':
@@ -165,7 +166,8 @@ class GRUNet(nn.Module):
         self.hidden_size = hidden_size
         self.hidden_activation = nn.ReLU()
         # GRU RNN layer
-        self.rnn = nn.RNN(input_size, hidden_size, 1, nonlinearity='tanh', bias=True, batch_first=True)
+        self.rnn = nn.RNN(input_size, hidden_size, 1, nonlinearity='tanh', 
+                          bias=True, batch_first=True)
         # self.rnn = nn.GRU(input_size, hidden_size, 1, bias=True, batch_first=True)
         # Fully connected Linear Hidden layer
         self.fc_hidden = nn.Linear(hidden_size, hidden_size, bias=True)
@@ -226,6 +228,7 @@ criterion = nn.MSELoss()
 num_independent_runs = 50  # Number of independent training runs ("epochs")
 all_runs_accuracies = []
 all_runs_losses = []
+all_runs_hidden = []
 
 for run in tqdm(range(num_independent_runs)):
     # Reinitialize the model for each independent run
@@ -253,6 +256,30 @@ for run in tqdm(range(num_independent_runs)):
     
     all_runs_accuracies.append(run_accuracies)
     all_runs_losses.append(run_losses)
+
+    #% Extract and Store Hidden States
+
+    # Switch to evaluation mode
+    model.eval()
+    all_hidden_states = []
+
+    with torch.no_grad():
+        for inputs, targets, optimal_actions in dataloader:
+            # Pass the data through the network and request hidden states
+            output, hidden, fc_hidden_out = model(inputs, return_hidden=True)
+            # Extract the hidden state from the last layer for the current batch.
+            # hidden has shape (num_layers, batch, hidden_size), so hidden[-1] gives shape (batch, hidden_size)
+            # final_hidden = fc_hidden_out.cpu().numpy()
+            final_hidden = hidden[-1].cpu().numpy()
+            all_hidden_states.append(final_hidden)
+            
+    # Concatenate all hidden states along the batch dimension
+    all_hidden_states = np.concatenate(all_hidden_states, axis=0)
+    all_runs_hidden.append(all_hidden_states)
+
+
+# Save mean result
+all_hidden_states = np.mean(all_runs_hidden, axis=0)
 
 
 
@@ -301,6 +328,7 @@ plt.legend()
 
 plt.tight_layout()
 plt.show()
+
 
 
 #%% Condition files 
@@ -388,27 +416,6 @@ df_data_sub['stim_id'] = df_data_sub['parsed_input'].apply(get_stim_label)
 # df_data.drop(columns=['parsed_input'], inplace=True)
 
 print(df_data_sub[['input', 'cue_id', 'stim_id']])
-
-
-
-#%% Extract and Store Hidden States
-
-# Switch to evaluation mode
-model.eval()
-all_hidden_states = []
-
-with torch.no_grad():
-    for inputs, targets, optimal_actions in dataloader:
-        # Pass the data through the network and request hidden states
-        output, hidden, fc_hidden_out = model(inputs, return_hidden=True)
-        # Extract the hidden state from the last layer for the current batch.
-        # hidden has shape (num_layers, batch, hidden_size), so hidden[-1] gives shape (batch, hidden_size)
-        # final_hidden = fc_hidden_out.cpu().numpy()
-        final_hidden = hidden[-1].cpu().numpy()
-        all_hidden_states.append(final_hidden)
-
-# Concatenate all hidden states along the batch dimension
-all_hidden_states = np.concatenate(all_hidden_states, axis=0)
 
 
 
@@ -627,85 +634,85 @@ plt.show()
 
 
 
-#%% Apply PCA for Dimensionality Reduction
+# #%% Apply PCA for Dimensionality Reduction
 
 
-# # labels = df_data_sub['cue_id'].values
-# # labels = df_data_sub['stim_id'].values
-labels = [label.split('__')[0].split('_')[3] for label in df_data_sub['stim_id'].values]
-unique_labels = np.unique(labels)
-unique_labels = ['left','right']
+# # # labels = df_data_sub['cue_id'].values
+# # # labels = df_data_sub['stim_id'].values
+# labels = [label.split('__')[0].split('_')[3] for label in df_data_sub['stim_id'].values]
+# unique_labels = np.unique(labels)
+# unique_labels = ['left','right']
 
-# Create a color mapping: assign a unique color to each label.
-cmap = plt.cm.get_cmap('viridis', len(unique_labels))
-color_dict = {label: cmap(i) for i, label in enumerate(unique_labels)}
+# # Create a color mapping: assign a unique color to each label.
+# cmap = plt.cm.get_cmap('viridis', len(unique_labels))
+# color_dict = {label: cmap(i) for i, label in enumerate(unique_labels)}
 
-# Map each trial's label to a color.
-dot_colors = [color_dict[label] for label in labels]
-
-
-# Perform PCA to reduce hidden state dimensions (e.g., to 2 components)
-pca = PCA(n_components=2)
-pca_result = pca.fit_transform(all_hidden_states)
-
-# Plot the PCA results
-plt.figure(figsize=(8, 6))
-plt.scatter(pca_result[:, 0], pca_result[:, 1], c=dot_colors, alpha=0.7)
-plt.xlabel("PCA Component 1")
-plt.ylabel("PCA Component 2")
-plt.title("PCA of GRU Hidden States")
-plt.grid(True)
-
-# Create a legend for the colors.
-patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
-plt.legend(handles=patches)
-
-plt.show()
+# # Map each trial's label to a color.
+# dot_colors = [color_dict[label] for label in labels]
 
 
-#%% t-SNE
+# # Perform PCA to reduce hidden state dimensions (e.g., to 2 components)
+# pca = PCA(n_components=2)
+# pca_result = pca.fit_transform(all_hidden_states)
 
+# # Plot the PCA results
+# plt.figure(figsize=(8, 6))
+# plt.scatter(pca_result[:, 0], pca_result[:, 1], c=dot_colors, alpha=0.7)
+# plt.xlabel("PCA Component 1")
+# plt.ylabel("PCA Component 2")
+# plt.title("PCA of GRU Hidden States")
+# plt.grid(True)
 
-
-# Apply t-SNE to reduce hidden state dimensionality to 2 components.
-tsne = TSNE(n_components=2, random_state=42, perplexity=30)
-tsne_result = tsne.fit_transform(all_hidden_states)
-
-# Plot t-SNE results.
-plt.figure(figsize=(8, 6))
-plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=dot_colors, alpha=0.7)
-plt.xlabel("t-SNE Component 1")
-plt.ylabel("t-SNE Component 2")
-plt.title("t-SNE of GRU Hidden States")
-plt.grid(True)
-
-# Create a legend for the colors.
-patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
+# # Create a legend for the colors.
+# patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
 # plt.legend(handles=patches)
 
-
-plt.show()
-
-
-#%% UMAP
+# plt.show()
 
 
+# #%% t-SNE
 
-# Apply UMAP to reduce dimensionality to 2 components.
-umap_embedder = umap.UMAP(n_components=2, random_state=42)
-umap_result = umap_embedder.fit_transform(all_hidden_states)
 
-# Plot UMAP results.
-plt.figure(figsize=(8, 6))
-plt.scatter(umap_result[:, 0], umap_result[:, 1], c=dot_colors, alpha=0.7)
-plt.xlabel("UMAP Component 1")
-plt.ylabel("UMAP Component 2")
-plt.title("UMAP of GRU Hidden States")
-plt.grid(True)
 
-# Create a legend for the colors.
-patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
-plt.legend(handles=patches)
+# # Apply t-SNE to reduce hidden state dimensionality to 2 components.
+# tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+# tsne_result = tsne.fit_transform(all_hidden_states)
 
-plt.show()
+# # Plot t-SNE results.
+# plt.figure(figsize=(8, 6))
+# plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=dot_colors, alpha=0.7)
+# plt.xlabel("t-SNE Component 1")
+# plt.ylabel("t-SNE Component 2")
+# plt.title("t-SNE of GRU Hidden States")
+# plt.grid(True)
+
+# # Create a legend for the colors.
+# patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
+# # plt.legend(handles=patches)
+
+
+# plt.show()
+
+
+# #%% UMAP
+
+
+
+# # Apply UMAP to reduce dimensionality to 2 components.
+# umap_embedder = umap.UMAP(n_components=2, random_state=42)
+# umap_result = umap_embedder.fit_transform(all_hidden_states)
+
+# # Plot UMAP results.
+# plt.figure(figsize=(8, 6))
+# plt.scatter(umap_result[:, 0], umap_result[:, 1], c=dot_colors, alpha=0.7)
+# plt.xlabel("UMAP Component 1")
+# plt.ylabel("UMAP Component 2")
+# plt.title("UMAP of GRU Hidden States")
+# plt.grid(True)
+
+# # Create a legend for the colors.
+# patches = [mpatches.Patch(color=color_dict[label], label=label) for label in unique_labels]
+# plt.legend(handles=patches)
+
+# plt.show()
 
