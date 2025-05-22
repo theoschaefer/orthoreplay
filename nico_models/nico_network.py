@@ -15,15 +15,17 @@ from stateformation_get_input_output import get_input_output_stateformation
 from stateformation_get_input_output import get_active_trials_input_comb
 from stateformation_get_input_output import rewardfun
 
+# Function to compute running average
+def running_average(data, window_size):
+    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
+
 # Load the data
 csvpath = '~/code/nn_orthoreplay/' #  
-# Call the fucntion the brings back input and outputs:
 inputs, targets = get_input_output_stateformation(sub='sub508',csvpath = csvpath, isRecurrent=True)   
 inputs = np.transpose(inputs, (1, 2, 0))
 inputs = inputs[np.newaxis, :, :, :]
 targets = np.transpose(targets, (1, 0))
 targets = targets[np.newaxis, :, :]
-
 inputs = torch.tensor(inputs, dtype=torch.float32)
 targets = torch.tensor(targets, dtype=torch.float32)
 
@@ -35,12 +37,12 @@ n_steps = inputs.shape[1] # 2 time steps
 input_dim = inputs.shape[2] # 16 features
 n_trials = inputs.shape[3] # 256 trials
 
-hidden_rnn_dim = 50
-hidden_fc_dim = 50
+hidden_rnn_dim = input_dim*2
+hidden_fc_dim = input_dim*2
 hidden_rnn_activation = 'tanh'
 hidden_fc_activation = 'relu'
-output_activation = 'softmax' 
-learning_rate = 0.01
+output_activation = 'linear' 
+learning_rate = 0.05
 
 # Define network
 class SimpleRNN(nn.Module):
@@ -88,47 +90,43 @@ class SimpleRNN(nn.Module):
         fc_hidden_out = self.hidden_activation(self.fc_hidden(rnn_last_out))
         # Pass through output layer
         output = self.output_activation(self.output(fc_hidden_out))
-        return output
-
+        return output, rnn_last_out, fc_hidden_out
 
 model = SimpleRNN(input_dim, hidden_rnn_dim, hidden_fc_dim, output_dim)
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
 # Train the model
 losses = []  # Store the loss values
 accuracies = []
+rewards = []
+pes = []
+activations = {'rnn': [], 'fc_hidden': []}
 model.train()
-for crep in range(2): 
-    for ctrial in range(n_trials):
-        trial_input = inputs[:, :, :,ctrial]
-        trial_target = targets[:, :, ctrial]     
-        optimizer.zero_grad()
-        output = model(trial_input)
-        loss = criterion(output, trial_target)
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.item())  # Store the loss value
-        # Determine which output node has the maximum value
-        predicted_node = torch.argmax(output, dim=1)  # Index of the maximum output node
-        target_node = torch.argmax(trial_target, dim=1)  # Index of the maximum target node
-        
-        # Compute accuracy for this trial
-        accuracy = (predicted_node == target_node).float().mean().item()
-        accuracies.append(accuracy)
-        
-        print('Epoch:', ctrial, 'Loss:', loss.item())
+for ctrial in range(n_trials):
+    trial_input = inputs[:, :, :,ctrial]
+    trial_target = targets[:, :, ctrial]     
+    optimizer.zero_grad()
+    output = model(trial_input)
+    loss = criterion(output, trial_target)
+    loss.backward()
+    optimizer.step()
+    losses.append(loss.item())  # Store the loss value
+    # Determine which output node has the maximum value
+    predicted_node = torch.argmax(output, dim=1)  # Index of the maximum output node
+    reward = trial_target[0, predicted_node.item()]
+    rewards.append(reward)
+    target_node = torch.argmax(trial_target, dim=1)  # Index of the maximum target node    
+    # Compute accuracy for this trial
+    accuracy = (predicted_node == target_node).float().mean().item()
+    accuracies.append(accuracy)       
+    print('Epoch:', ctrial, 'Loss:', loss.item())
 
-# Compute running averages
-window_size = 15
-
-# Function to compute running average
-def running_average(data, window_size):
-    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 
 # Compute running averages for losses and accuracies
-running_losses = running_average(losses, window_size)
-running_accuracies = running_average(accuracies, window_size)
+running_losses = running_average(losses, 15)
+running_accuracies = running_average(accuracies, 15)
+running_rewards = running_average(rewards, 15)
 
 # Plot the running averages
 plt.figure(figsize=(12, 5))
@@ -148,14 +146,4 @@ plt.ylabel('Accuracy')
 plt.title('Running Average of Accuracies')
 plt.legend()
 plt.show()
-
-
-plt.plot(range(n_trials*2), losses, label='Training Loss')
-plt.show()
-
-plt.plot(range(n_trials*2), accuracies, label='Training Loss')
-plt.show()
-
-activations['rnn'] = np.array(activations['rnn'])
-activations['fc_hidden'] = np.array(activations['fc_hidden'])
 
