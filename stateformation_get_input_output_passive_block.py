@@ -22,7 +22,7 @@ def get_input_output_stateformation(sub,csvpath,isRecurrent,withPassive):
         
     else:
         # Load CSV summerizing behaviour of all participants
-        log_df = pd.read_csv(csvpath + 'State_Formation_behaviour.csv')
+        log_df = pd.read_csv(csvpath + 'State_Formation_behaviour_human.csv')
         
         
         if withPassive:
@@ -42,6 +42,8 @@ def get_input_output_stateformation(sub,csvpath,isRecurrent,withPassive):
     outputs = np.zeros((n_trials,2)) #trials X outputnodes
     states = np.empty(n_trials, dtype=object)
     passive_type = np.empty(n_trials, dtype=object)
+    responses = np.empty(n_trials, dtype=object)
+    correct_responses = np.empty(n_trials, dtype=object)
     block = np.zeros((n_trials))
     block[:] = np.nan
     recurrent_inputs = np.zeros((n_trials,2,16)) # trials X time points X input nodes 
@@ -52,6 +54,8 @@ def get_input_output_stateformation(sub,csvpath,isRecurrent,withPassive):
         recurrent_inputs[itrial,1,:]=np.hstack((np.zeros(4),inputs[itrial][4:]))
         cinputs = recurrent_inputs[itrial,:,:]
         block[itrial] = csub_log.iloc[itrial].block_type_num
+        responses[itrial] = csub_log.iloc[itrial].response
+        correct_responses[itrial] = csub_log.iloc[itrial].correct_response
         
         itrial_inblock = sum(block==block[itrial])-1
         
@@ -96,7 +100,7 @@ def get_input_output_stateformation(sub,csvpath,isRecurrent,withPassive):
     if isRecurrent:
         inputs = recurrent_inputs.copy()
  
-    return inputs, outputs, isPassive, states, block, passive_type
+    return inputs, outputs, isPassive, states, block, passive_type,  responses, correct_responses
 
 #%% Define a function that generates a shuffled episode of 192 trials (all possible inputs)
 def get_active_trials_input_comb(n_input_nodes,n_actions,n_feat_itemA):       
