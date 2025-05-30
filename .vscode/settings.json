@@ -1,3 +1,9 @@
 {
-    "github.copilot.nextEditSuggestions.enabled": true
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "github.copilot.chat.copilotDebugCommand.enabled": true,
+    "github.copilot.chat.testGeneration.instructions": [],
+    "github.copilot.advanced": {
+    },
+    "github.copilot.chat.codeGeneration.useInstructionFiles": false,
+    "github.gitAuthentication": false
 }
